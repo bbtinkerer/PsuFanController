@@ -50,6 +50,11 @@ int main(void)
    DDRB = (1 << PB4) | (1 << PB0);
    PORTB = (1 << PB0);
    
+   // interweb said unused ports should not be floating
+   // PB1 and PB2 unused, set to input (default)
+   // and enable the internal pull-up resistor
+   PORTB |= (1 << PB1) | (1 << PB2);
+   
    // turn off ADC since not using it
    ADCSRA &= ~(1 << ADEN);
    // datasheet said analog comparator can be turned off, set ACD to 1
