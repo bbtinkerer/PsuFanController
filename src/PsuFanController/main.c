@@ -34,8 +34,11 @@
 #include "ds18b20.h"
 
 #define PWM_FULL 255
-#define FAN_ON_TEMPERATURE 30
-#define MAX_TEMPERATURE 40
+#define FAN_ON_TEMPERATURE 35
+#define FAN_OFF_TEMPERATURE 30
+#define MAX_TEMPERATURE 45
+
+int fanOn = 0;
 
 void enableSleep();
 
@@ -76,47 +79,58 @@ int main(void)
    {
       currentTemperature = ds18b20_gettemp();
 
-      if(currentTemperature >= FAN_ON_TEMPERATURE)
+      if(currentTemperature >= FAN_OFF_TEMPERATURE)
       {
-         // turn fan on full, only 5v and pretty quiet so no need to PWM
-         PORTB |= (1 << PB4);
-         
-         if(currentTemperature >= MAX_TEMPERATURE)
+         if(currentTemperature >= FAN_ON_TEMPERATURE && !fanOn)
          {
-            // Fast PWM reset, set ports to normal operation
-            TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));
-            // turn off PWM
-            TCCR0B &= ~(1 << CS00);
-            // flash LED indicator
-            PORTB ^= (1 << PB0);
+            // turn fan on full, only 5v and pretty quiet so no need to PWM
+            PORTB |= (1 << PB4);
+            fanOn = 1;
          }
-         else
+         
+         if(fanOn)
          {
-            // turn on LED as temperature indicator by brightness
-            // scale dutyCycle from range from ON to MAX temp
-            dutyCycle = (currentTemperature-FAN_ON_TEMPERATURE) / (MAX_TEMPERATURE-FAN_ON_TEMPERATURE) * PWM_FULL;
-            if(dutyCycle > MAX_TEMPERATURE)
+            if(currentTemperature >= MAX_TEMPERATURE)
             {
-               dutyCycle = MAX_TEMPERATURE;
+               // Fast PWM reset, set ports to normal operation
+               TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));
+               // turn off PWM
+               TCCR0B &= ~(1 << CS00);
+               // flash LED indicator
+               PORTB ^= (1 << PB0);
             }
-            OCR0A = dutyCycle;
+            else
+            {
+               // turn on LED as temperature indicator by brightness
+               // scale dutyCycle from range from ON to MAX temp
+               dutyCycle = (currentTemperature-FAN_OFF_TEMPERATURE) / (MAX_TEMPERATURE-FAN_OFF_TEMPERATURE) * PWM_FULL;
+               if(dutyCycle > MAX_TEMPERATURE)
+               {
+                  dutyCycle = MAX_TEMPERATURE;
+               }
+               OCR0A = dutyCycle;
+               
+               // turn the PWM back on
+               TCCR0A |= (1 << COM0A1) | (1 << WGM01) | (1 << WGM00);
+               TCCR0B |= (1 << CS00);
+            }
             
-            // turn the PWM back on
-            TCCR0A |= (1 << COM0A1) | (1 << WGM01) | (1 << WGM00);            
-            TCCR0B |= (1 << CS00);
+            // take a reading again after a second
+            _delay_ms(1000);
          }
-         
-         // take a reading again after a second
-         _delay_ms(1000);
       }
       else
+      {
+         fanOn = 0;
+      }
+      
+      if(!fanOn)
       {
          // Fast PWM reset, set ports to normal operation
          TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));
          // set ports low/off
          TCCR0B &= ~(1 << CS00);
          PORTB &= ~((1 << PB0) | (1 << PB4));
-         
          enableSleep();
       }
    }
